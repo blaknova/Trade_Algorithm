@@ -6,8 +6,6 @@ threshold = 1000
 
 
 def Aggressor_Side_Classification(Current_price, Ask_price, Bid_price, prices):
-    Spread = Ask_price - Bid_price
-
     if Current_price >= Ask_price:
         return "Buy"
     elif Current_price <= Bid_price:
@@ -50,9 +48,7 @@ def Cumulative_Volume_Delta_Calculator(Current_price,Ask_price,Bid_price, prices
     
 Previous_EMA = 0
 def bid_ask_imbalance(bid_depth, ask_depth, alpha, timestamp):
-
     global Previous_EMA
-
     imbalance = (bid_depth - ask_depth)/(bid_depth + ask_depth)
     if imbalance > 0.5:
         label = "Bid_Heavy"
@@ -74,35 +70,24 @@ def bid_ask_imbalance(bid_depth, ask_depth, alpha, timestamp):
         return imbalance, label, None
 
 def Absorption(trade_price, trade_size, tick_size):
-    global volume_per_level, high_per_level, low_per_level
-    
+    global volume_per_level, high_per_level, low_per_level   
     level = round(trade_price / tick_size) * tick_size
     volume_per_level[level] += trade_size
-    
     high_per_level[level] = max(high_per_level[level], trade_price)
     low_per_level[level] = min(low_per_level[level], trade_price)
-    
     displacement = high_per_level[level] - low_per_level[level]
     
     if displacement == 0:
-        absorption = float('inf')
-        print(absorption)
+        absorption = float('inf') 
     else:
         absorption = volume_per_level[level] / displacement
-        print(absorption)
-    
-    if absorption > threshold:
-        print("Absorption Detected")
+          
+    if absorption > threshold: 
         return "Absorption_Detected"
-    else:
-        print("No Absorption Detected")
+    else:   
         return absorption
 
 # Reset the global dictionaries between tests
 volume_per_level.clear()
 high_per_level.clear()
 low_per_level.clear()
-
-# Two trades far apart in price, small volume
-Absorption(trade_price=100.0, trade_size=50, tick_size=0.25)
-print(Absorption(trade_price=102.0, trade_size=50, tick_size=0.25))
