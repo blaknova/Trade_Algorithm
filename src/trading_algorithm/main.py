@@ -1,33 +1,42 @@
-def Aggressor_Side_Classification():
-    Current_price = 80
-    Ask_price = 90
-    Bid_price = 70
+def Aggressor_Side_Classification(Current_price, Ask_price, Bid_price,prices):
     Spread = Ask_price - Bid_price
 
     if Current_price >= Ask_price:
-        print("Buy")
+        return "Buy"
     elif Current_price <= Bid_price:
-        print("Sell")
+        return "Sell"
     else:
         Deadzone = Bid_price < Current_price < Ask_price
         if Deadzone:
-            prices = [80, 80, 80, 80, 80, 80]
             i = len(prices) - 1
-
             while True:
                 current = prices[i]
                 previous = prices[i - 1]
 
                 if previous < current:
-                    print("Buy")
-                    break
+                    return "Buy"
                 elif previous > current:
-                    print("Sell")
-                    break
+                    return "Sell"
                 elif previous == current:
                     i = i - 1
                     if i == 0:
-                        print("No Aggressor Side")
-                        break
-Aggressor_Side_Classification()
-    
+                        return "No Aggressor Side"
+                    
+def Cumulative_Volume_Delta_Calculator(Current_price,Ask_price,Bid_price, prices, volume, timestamp):
+    Cumulative_Volume_Delta = 0
+    while True:
+        label =Aggressor_Side_Classification(Current_price, Ask_price, Bid_price, prices)
+        Volume_Delta = 0
+        if label == "Buy":
+            Volume_Delta = volume
+        elif label == "Sell":
+            Volume_Delta = -volume
+        else:
+            Volume_Delta += 0
+
+        if timestamp >= 1530:
+            Cumulative_Volume_Delta += Volume_Delta
+        elif timestamp == 2300:
+            Cumulative_Volume_Delta = 0
+        return Cumulative_Volume_Delta
+Cumulative_Volume_Delta_Calculator(Current_price=100, Ask_price=101, Bid_price=99, prices=[98, 99, 100, 101], volume=10, timestamp=1535)
