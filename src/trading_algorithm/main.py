@@ -1,4 +1,4 @@
-def Aggressor_Side_Classification(Current_price, Ask_price, Bid_price,prices):
+def Aggressor_Side_Classification(Current_price, Ask_price, Bid_price, prices):
     Spread = Ask_price - Bid_price
 
     if Current_price >= Ask_price:
@@ -38,5 +38,7 @@ def Cumulative_Volume_Delta_Calculator(Current_price,Ask_price,Bid_price, prices
             Cumulative_Volume_Delta += Volume_Delta
         elif timestamp == 2300:
             Cumulative_Volume_Delta = 0
+        print(Volume_Delta)
         return Cumulative_Volume_Delta
-Cumulative_Volume_Delta_Calculator(Current_price=100, Ask_price=101, Bid_price=99, prices=[98, 99, 100, 101], volume=10, timestamp=1535)
+
+Cumulative_Volume_Delta_Calculator(Current_price=10, Ask_price=12, Bid_price=19, prices=[98, 99, 100, 101], volume=10, timestamp=1635)
