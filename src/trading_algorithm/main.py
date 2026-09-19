@@ -34,9 +34,11 @@ def Cumulative_Volume_Delta_Calculator(Current_price,Ask_price,Bid_price, prices
         else:
             Volume_Delta += 0
 
-        if timestamp >= 1530:
+        if timestamp >= 2300:
+            Cumulative_Volume_Delta = 0
+        elif timestamp >= 1530:
             Cumulative_Volume_Delta += Volume_Delta
-        print(Volume_Delta)
+        print(Cumulative_Volume_Delta)
         return Cumulative_Volume_Delta
 
-Cumulative_Volume_Delta_Calculator(Current_price=10, Ask_price=12, Bid_price=19, prices=[98, 99, 100, 101], volume=10, timestamp=1635)
+Cumulative_Volume_Delta_Calculator(Current_price=10, Ask_price=12, Bid_price=19, prices=[98, 99, 100, 101], volume=10, timestamp=1459)
