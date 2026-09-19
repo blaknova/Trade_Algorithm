@@ -36,8 +36,6 @@ def Cumulative_Volume_Delta_Calculator(Current_price,Ask_price,Bid_price, prices
 
         if timestamp >= 1530:
             Cumulative_Volume_Delta += Volume_Delta
-        elif timestamp == 2300:
-            Cumulative_Volume_Delta = 0
         print(Volume_Delta)
         return Cumulative_Volume_Delta
 
