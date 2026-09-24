@@ -191,45 +191,66 @@ current_bar = None
 def round_to_bar(timestamp):
     """Group timestamps into the same price bar bucket.
 
-    The project uses integer timestamps like 1000, 1005, 1015, so values in
-    the same 100-unit bucket belong to the same bar.
+    This is deliberately simple for now: a timestamp is placed into a bucket such as
+    1000, 1100, 1200. For live trading this should eventually be configurable so the
+    bar size can match the exchange or strategy timeframe.
     """
     return int(timestamp // 100) * 100
 
 
 def Footprint_Delta(trade_price, volume, direction, timestamp, tick_size):
+    """Accumulate per-price footprint data for the active bar.
+
+    Intended contract:
+    - intra-bar ticks update the footprint and return None
+    - when the next bar begins, the previous bar is finalized and its summary is printed
+    - this keeps the function lightweight during active candle formation and moves the
+      expensive summary logic to the candle-close boundary
+    """
     global footprint, bar_high, bar_low, current_bar
 
+    # Bucket the incoming timestamp into a bar identifier.
     bar_time = round_to_bar(timestamp)
 
+    # If the bar has just rolled over, finalize the previous candle before starting a new one.
     if current_bar is None:
         current_bar = bar_time
     elif bar_time != current_bar:
         if footprint:
+            # Point of control: the price level with the highest total traded volume.
             POC = max(footprint, key=lambda level: footprint[level][0] + footprint[level][1])
+
+            # High/low delta is measured at the current candle extremities to highlight absorption.
             delta_at_high = footprint.get(bar_high, [0, 0])[0] - footprint.get(bar_high, [0, 0])[1]
             delta_at_low = footprint.get(bar_low, [0, 0])[0] - footprint.get(bar_low, [0, 0])[1]
 
+            # Total bar delta tracks net buyer/seller pressure for the completed bar.
             total_buy = sum(level_data[0] for level_data in footprint.values())
             total_sell = sum(level_data[1] for level_data in footprint.values())
             bar_delta = total_buy - total_sell
 
+            # Keep this print for debugging and strategy inspection in live testing.
             print(POC, delta_at_high, delta_at_low, bar_delta)
 
+        # Reset the active footprint state for the new candle.
         footprint.clear()
         bar_high = 0
         bar_low = float('inf')
         current_bar = bar_time
 
+    # Normalize trade price into a tick-based price level for footprint aggregation.
     level = round(trade_price / tick_size) * tick_size
 
+    # Update the buy/sell ledger for the current price level.
     if direction == "Buy":
         footprint[level][0] += volume
     elif direction == "Sell":
         footprint[level][1] += volume
 
+    # Track bar extrema so the current candle can be summarized later.
     bar_high = max(bar_high, trade_price)
     bar_low = min(bar_low, trade_price)
 
+    # The live candle should not emit a summary on each trade; the summary is produced at close.
     return None
     
