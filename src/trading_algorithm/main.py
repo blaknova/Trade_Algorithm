@@ -181,3 +181,55 @@ def Exhaustion(trade_price, volume_delta):
             return "Bearish_Exhaustion"
 
     return "No_Exhaustion"
+
+footprint = defaultdict(lambda: [0, 0])
+bar_high = 0
+bar_low = float('inf')
+current_bar = None
+
+
+def round_to_bar(timestamp):
+    """Group timestamps into the same price bar bucket.
+
+    The project uses integer timestamps like 1000, 1005, 1015, so values in
+    the same 100-unit bucket belong to the same bar.
+    """
+    return int(timestamp // 100) * 100
+
+
+def Footprint_Delta(trade_price, volume, direction, timestamp, tick_size):
+    global footprint, bar_high, bar_low, current_bar
+
+    bar_time = round_to_bar(timestamp)
+
+    if current_bar is None:
+        current_bar = bar_time
+    elif bar_time != current_bar:
+        if footprint:
+            POC = max(footprint, key=lambda level: footprint[level][0] + footprint[level][1])
+            delta_at_high = footprint.get(bar_high, [0, 0])[0] - footprint.get(bar_high, [0, 0])[1]
+            delta_at_low = footprint.get(bar_low, [0, 0])[0] - footprint.get(bar_low, [0, 0])[1]
+
+            total_buy = sum(level_data[0] for level_data in footprint.values())
+            total_sell = sum(level_data[1] for level_data in footprint.values())
+            bar_delta = total_buy - total_sell
+
+            print(POC, delta_at_high, delta_at_low, bar_delta)
+
+        footprint.clear()
+        bar_high = 0
+        bar_low = float('inf')
+        current_bar = bar_time
+
+    level = round(trade_price / tick_size) * tick_size
+
+    if direction == "Buy":
+        footprint[level][0] += volume
+    elif direction == "Sell":
+        footprint[level][1] += volume
+
+    bar_high = max(bar_high, trade_price)
+    bar_low = min(bar_low, trade_price)
+
+    return None
+    
