@@ -1,4 +1,6 @@
 from collections import defaultdict, deque
+import math
+import statistics
 
 # Tracks the cumulative traded volume at each price level.
 volume_per_level = defaultdict(float)
@@ -253,4 +255,115 @@ def Footprint_Delta(trade_price, volume, direction, timestamp, tick_size):
 
     # The live candle should not emit a summary on each trade; the summary is produced at close.
     return None
-    
+
+
+# Large-print detection uses a rolling 15-minute volume profile.
+# Each bucket stores recent trade sizes so the system can measure whether a trade is unusually large
+# relative to the local distribution before it is treated as a real anomaly.
+bin_volumes = defaultdict(lambda: deque(maxlen=100))
+bin_stats = defaultdict(lambda: {"mean": 0, "std": 0})
+
+# Large prints are recorded in a short deque so the detector can check for nearby price clustering
+# and confirm whether the trade is isolated or part of a meaningful burst of activity.
+large_prints = deque(maxlen=50)
+
+# Tunable parameters for anomaly detection and clustering.
+# K = threshold for the z-score anomaly detector.
+# ZONE_TICKS = price zone width measured in ticks for cluster confirmation.
+# TICK_SIZE = minimum price increment used for futures-style price grids.
+K = 3
+ZONE_TICKS = 8
+TICK_SIZE = 0.25
+
+
+def Large_Print_Detection(
+    trade_price,
+    volume,
+    direction,
+    timestamp,
+    tick_size=0.25,
+    zone_ticks=8,
+) -> dict | str:
+    """Flag unusually large volume prints and cluster them into discrete large-print events.
+
+    The detector keeps a rolling 15-minute volume history for each bin, calculates whether
+    the current trade is an outlier using a z-score, and then checks whether the trade sits
+    inside a nearby cluster of other large prints. This keeps the logic lightweight while
+    still preserving a realistic footprint-style pattern detector.
+    """
+    global bin_volumes, bin_stats, large_prints
+
+    # Step 1: place the trade into a 15-minute bucket, which keeps the local volume context stable.
+    bin_id = math.floor(timestamp / 15) * 15
+
+    # Step 2: append the current trade size to the rolling history of that same 15-minute bin.
+    bin_volumes[bin_id].append(volume)
+
+    # Step 3: do not trust a single-volume anomaly until the local sample is large enough.
+    if len(bin_volumes[bin_id]) < 10:
+        return "Not Enough Bin Data"
+
+    # Step 4: calculate the local mean and standard deviation for the ongoing 15-minute window.
+    bin_mean = statistics.mean(bin_volumes[bin_id])
+    bin_std = statistics.stdev(bin_volumes[bin_id])
+    bin_stats[bin_id] = {"mean": bin_mean, "std": bin_std}
+
+    # Step 5: if dispersion is zero, there is no meaningful statistical outlier to detect.
+    if bin_std == 0:
+        z_score = 0
+    else:
+        z_score = (volume - bin_mean) / bin_std
+
+    # Step 6: flag the print when the trade exceeds the configured anomaly threshold.
+    # This is the main volume-distribution test used to identify a large print.
+    if z_score >= K:
+        # Record the candidate large print first so the cluster check can compare it against previously
+        # flagged anomalies in the same 15-minute zone. This prevents isolated spikes from being treated
+        # as confirmed signals until a peer print appears nearby.
+        candidate = (timestamp, trade_price, volume, direction)
+        large_prints.append(candidate)
+
+        # Determine whether the current bin is high-volume or low-volume before final confirmation.
+        session_means = [stats["mean"] for stats in bin_stats.values() if stats["mean"] > 0]
+        if session_means:
+            session_average = statistics.mean(session_means)
+            is_high_volume_bin = bin_mean > session_average
+        else:
+            is_high_volume_bin = False
+
+        # Step 7: cluster logic checks whether other large prints are close in price and time.
+        zone_width = zone_ticks * tick_size
+        nearby_prints = [
+            printed_trade
+            for printed_trade in large_prints
+            if printed_trade is not candidate
+            and abs(printed_trade[1] - trade_price) <= zone_width
+            and abs(printed_trade[0] - timestamp) <= 15
+        ]
+
+        # A true large print should be confirmed by a nearby peer in the same zone; isolated spikes are
+        # rejected to keep the signal realistic and avoid false positives.
+        cluster_count = len(nearby_prints) + 1
+        if cluster_count >= 2:
+            return {
+                "signal": "Large_Print_Detected",
+                "direction": direction,
+                "price": trade_price,
+                "volume": volume,
+                "z_score": round(z_score, 2),
+                "cluster_count": cluster_count,
+                "bin_id": bin_id,
+                "bin_type": "high_volume" if is_high_volume_bin else "low_volume",
+            }
+
+        # If the trade is extreme but not in a valid cluster, keep it from becoming a false signal.
+        return {
+            "signal": "No_Large_Print",
+            "z_score": round(z_score, 2) if bin_std > 0 else 0,
+        }
+
+    # Step 10: if the trade is not large enough or not clustered, report no large print.
+    return {
+        "signal": "No_Large_Print",
+        "z_score": round(z_score, 2) if bin_std > 0 else 0,
+    }
